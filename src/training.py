@@ -1,9 +1,10 @@
 import logging; LOGGER = logging.getLogger("training")
+import re
 
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
 import torch
-import tqdm
+import tqdm.autonotebook as tqdm
 
 from dataset import CustomAudioDataset
 from model import AudioDenoiser
@@ -13,7 +14,7 @@ import config
 class Training:
     def __init__(self) -> None:
         self.model = AudioDenoiser().to(config.DEVICE)
-        self.criterion = DenoisingLoss()
+        self.criterion = DenoisingLoss().to(config.DEVICE)
         self.optimizer =  AdamW( self.model.parameters(), lr = config.LEARNING_RATE, weight_decay = config.WEIGHT_DECAY )
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau( self.optimizer, mode="min", factor=0.5, patience=3 )
         self.scaler = torch.amp.GradScaler( enabled = (config.USE_AMP and config.DEVICE.type == "cuda") )
@@ -76,10 +77,13 @@ class Training:
     def load_model(self) -> int:
 
         try:
+            # Retriev and sort by name suffix
             models = [(x,x.name) for x in config.MODEL_FOLDER.iterdir() if x.is_file()]
+            models = sorted(models, key=lambda x: int(re.search(r'\d+', x[1]).group())) # pyright: ignore[reportOptionalMemberAccess]
             if ( len(models) == 0 ): raise FileNotFoundError
-            models.sort(key=lambda x: x[1])
-            checkpoint = torch.load( models[-1][0].absolute(), map_location=config.DEVICE, weights_only=True )
+        
+            last_model_path = models[-1][0].absolute()
+            checkpoint = torch.load( last_model_path, map_location=config.DEVICE, weights_only=True )
 
             self.model.load_state_dict(checkpoint["model_state_dict"])
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -90,7 +94,7 @@ class Training:
 
             start_epoch = checkpoint["epoch"] + 1
 
-            LOGGER.info(f"Resuming training from epoch {start_epoch}")
+            LOGGER.info(f"Resuming training from {last_model_path} epoch {start_epoch}")
 
             return start_epoch
 
@@ -118,7 +122,14 @@ class Training:
 
             with torch.amp.autocast( config.DEVICE.type, enabled = (config.USE_AMP and config.DEVICE.type == "cuda") ):
                 predicted_audio, predicted_spec = self.model(noisy_audio)
-                loss, audio_loss, spec_loss = self.criterion(predicted_audio, predicted_spec, clean_audio, None )
+                clean_spec = self.model.stft(clean_audio)
+
+                loss, audio_loss, spec_loss = self.criterion(
+                    predicted_audio,
+                    predicted_spec,
+                    clean_audio,
+                    clean_spec,
+                )
 
             self.scaler.scale(loss).backward()
             self.scaler.unscale_(self.optimizer)
@@ -154,7 +165,13 @@ class Training:
                 predicted_audio, predicted_spec = self.model(noisy_audio)
 
                 # Calculate the loss
-                loss, _, _ = self.criterion( predicted_audio, predicted_spec, clean_audio, None )
+                clean_spec = self.model.stft(clean_audio)
+                loss, _, _ = self.criterion(
+                    predicted_audio,
+                    predicted_spec,
+                    clean_audio,
+                    clean_spec,
+                )
                 validation_loss += loss.item()
 
         validation_loss /= len(self.validation_loader)
@@ -168,5 +185,5 @@ class Training:
         self.save_model(epoch)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     Training().train()

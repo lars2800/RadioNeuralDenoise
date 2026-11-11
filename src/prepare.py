@@ -1,7 +1,7 @@
 import logging; LOGGER = logging.getLogger("data-prep")
 from pathlib import Path
 import soundfile as sf
-from tqdm import tqdm
+import tqdm.autonotebook as tqdm
 import numpy as np
 import urllib.request
 import tarfile
@@ -61,7 +61,7 @@ class DataPrep:
         validation_index:int = 0
 
         for speaker, flac_files in self.collected_files.items():
-            for flac_file in tqdm( flac_files, desc=f"speaker {speaker}" ):
+            for flac_file in tqdm.tqdm( flac_files, desc=f"speaker {speaker}" ):
                 audio, sample_rate = sf.read( flac_file.resolve() )
 
                 if ( speaker in self.validation_speakers ):
@@ -85,6 +85,7 @@ class DataPrep:
             LOGGER.info("Dataset already downloaded. Skipping download.")
             return
 
+        # Download dattase
         archive_path = config.LIBRI_SPEECH_FOLDER / "dev-clean.tar.gz"
 
         LOGGER.info("Downloading LibriSpeech dev-clean dataset...")

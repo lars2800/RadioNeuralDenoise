@@ -8,8 +8,6 @@
 # waveform, and multiplying the noisy *complex* spectrum by a complex mask also
 # corrects phase. STFT/ISTFT are differentiable, so everything stays trainable.
 #
-# Auther note: I have no clue how this one works, this is the work of an llm
-#
 
 import torch
 import torch.nn as nn
@@ -34,11 +32,11 @@ class ConvBlock2D(nn.Module):
         return self.block(x)
 
 class AudioDenoiser(nn.Module):
-    def __init__(self, base_channels=32, fft_size=None, hop_size=None):
+    def __init__(self, base_channels=32, ):
         super().__init__()
 
-        self.fft_size = fft_size if fft_size is not None else config.STFT_FFT_SIZE
-        self.hop_size = hop_size if hop_size is not None else config.STFT_HOP_SIZE
+        self.fft_size = config.STFT_FFT_SIZE
+        self.hop_size = config.STFT_HOP_SIZE
         self.register_buffer( "window", torch.hann_window(self.fft_size), persistent=False, )
 
         # input has 2 channels (real + imaginary of the noisy STFT)

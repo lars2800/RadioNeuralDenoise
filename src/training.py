@@ -155,7 +155,7 @@ class Training:
         validation_loss = 0.0
 
         with torch.inference_mode():
-            for noisy_audio, clean_audio in tqdm.tqdm( self.validation_loader, desc="validation epoch: " ): # CHANGED: simple pair
+            for noisy_audio, clean_audio in tqdm.tqdm( self.validation_loader, desc="validation epoch: " ):
 
                 # Move training data to device
                 noisy_audio = noisy_audio.to(config.DEVICE)
